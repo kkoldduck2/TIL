@@ -146,6 +146,23 @@
     }
     ```
     
+- Receiver.java
+    
+    ```java
+    @Component
+    public class Receiver {
+    	private CountDownLatch latch = new CountDownLatch(1);
+    
+    	public void receiveMessage(String message) {
+    		System.out.println("Receiver : Received <" + message + ">");
+    		latch.countDown();
+    	}
+    
+    	public CountDownLatch getLatch() {
+    		return latch;
+    	}
+    }
+    ```
 
 - 실행 Bean
     
