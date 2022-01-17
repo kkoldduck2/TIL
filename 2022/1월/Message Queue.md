@@ -57,6 +57,9 @@ Decoupled된 system에서는 시스템들이 서로 연결되지 않고도 통�
 
 [https://www.cloudamqp.com/blog/what-is-message-queuing.html](https://www.cloudamqp.com/blog/what-is-message-queuing.html)
 
+
+
+
 # RabbitMQ Exchanges, routing keys and bindings
 
 > 1. Exchange, Routing key, binding이란 무엇인가?
