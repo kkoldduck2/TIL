@@ -183,3 +183,7 @@
     	}
     }
     ```
+    
+    
+    ### 참고
+    https://spring.io/guides/gs/messaging-rabbitmq/
