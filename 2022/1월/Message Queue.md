@@ -50,21 +50,18 @@ Decoupled된 system에서는 시스템들이 서로 연결되지 않고도 통�
     
     또한, workload가 증가하여 system을 scale up 해야 할 경우, consumer들을 추가함으로써 해결할 수 있다. 
     
-
 ### Rabbit MQ와 AMQP
 
 - RabbitMQ 는 Advanced Message Queuing Protocol (AMQP)를 구현한 message-oriented middleware 오픈소스이다.
 
 [https://www.cloudamqp.com/blog/what-is-message-queuing.html](https://www.cloudamqp.com/blog/what-is-message-queuing.html)
 
-
 # RabbitMQ Exchanges, routing keys and bindings
 
 > 1. Exchange, Routing key, binding이란 무엇인가?
 2. Exchange들과 Queue들이 어떻게 연결되는가?
 3. Exchange, Routing key, binding를 언제 어떻게 사용하는지 안다.
-> 
-
+>
 ### Exchange
 
 - Producer는 큐에 바로 메시지를 publish하지 않는다. 대신 Exchange에 메시지를 publish한다.
