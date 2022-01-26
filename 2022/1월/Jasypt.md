@@ -1,0 +1,122 @@
+### **시나리오**
+
+- 깃헙 같은 공개 장소에 프로젝트를 관리하다보면 DB 패스워드 등 보안에 민감한 정보들이 노출되기 쉽다.
+- 이처럼 보안에 민감한 정보를 보호하기 위해 Jasypt를 사용한다.
+
+### Jasypt가 properties를 암호화하고 사용하는 방식
+
+- 스프링이 실행되면서 spring context가 생성된다 .
+- context에 있는 jasypt 빈들이 property에 등록된 암호를 풀어준다.
+- 암호를 풀기위한 “key”는 프로젝트 내부가 아니라 **구동 서버의 환경 변수에** 세팅되기 때문에 깃헙에 업로드 시 노출될 위험이 없다.
+
+### 설정 방법
+
+1. 빈 등록  
+    - 스프링 context에 복호화를 위한 객체 3개를 bean으로 만들어 준다 .
+
+```java
+
+@Configuration
+public class JasyptConfiguration {
+	
+	// reference jvm options @jasypt.encryptor.password
+	@Value("${jasypt.encryptor.password}")
+	private String encryptKey;
+	
+	// reference jvm options @jasypt.encryptor.algorithm
+	@Value("${jasypt.encryptor.algorithm}")
+	private String algorithmKey;
+	
+	@Bean("jasyptStringEncryptor")
+	public StringEncryptor stringEncryptor() {
+
+		PooledPBEStringEncryptor encryptor = new PooledPBEStringEncryptor();
+		
+		EnvironmentStringPBEConfig configuration = new EnvironmentStringPBEConfig();
+		configuration.setPassword(encryptKey);
+		configuration.setAlgorithm(algorithmKey);
+		configuration.setKeyObtentionIterations(1000);
+		configuration.setPoolSize(3);
+		configuration.setProviderName("SunJCE");
+		configuration.setSaltGeneratorClassName("org.jasypt.salt.RandomSaltGenerator");
+		configuration.setIvGeneratorClassName("org.jasypt.iv.RandomIvGenerator");
+		configuration.setStringOutputType("base64");
+		encryptor.setConfig(configuration);
+		return encryptor;
+	}
+}
+```
+
+1. application-prop.yml
+
+```java
+jasypt:
+  encryptor:
+    bean: jasyptStringEncryptor
+```
+
+1. 구동 서버 환경 변수에 알고리즘과 패스워드 설정
+
+![image](https://user-images.githubusercontent.com/47748246/151085276-21a1c42e-e048-4be9-88d1-6e86c22371d9.png)
+
+1. 테스트를 통해 암호화된  결과 얻기 
+
+```java
+
+class EncryptTest {
+
+	private Logger logger = LoggerFactory.getLogger(this.getClass());
+	
+	@Test
+	void test() {
+
+		PooledPBEStringEncryptor encryptor = new PooledPBEStringEncryptor();
+		
+		EnvironmentStringPBEConfig configuration = new EnvironmentStringPBEConfig();
+		configuration.setPassword("JVM 환경 변수에 설정한 값");
+		configuration.setAlgorithm("JVM 환경 변수에 설정한 값");
+		configuration.setKeyObtentionIterations(1000);
+		configuration.setPoolSize(3);
+		configuration.setProviderName("SunJCE");
+		configuration.setSaltGeneratorClassName("org.jasypt.salt.RandomSaltGenerator");
+		configuration.setIvGeneratorClassName("org.jasypt.iv.RandomIvGenerator");
+		configuration.setStringOutputType("base64");
+		encryptor.setConfig(configuration);
+		
+		String url = "jdbc:mysql://localhost:3306/test";
+		String dbusername = "dbusername ";
+		String dbpassword = "dbpassword ";
+		
+		String ftpusername = "ftpusername ";
+		String ftppassword = "ftppassword ";
+		
+		String image = "image01";
+		String imagePw = "imagePw ";
+		
+    String username = "username ";
+    String password = "password ";
+		
+		logger.debug("기존  URL :: {} | 변경 URL :: {}", url ,encryptor.encrypt(url));
+		logger.debug("기존  dbusername :: {} | 변경 dbusername :: {}", dbusername, encryptor.encrypt(dbusername));
+		logger.debug("기존  dbpassword :: {} | 변경 dbpassword :: {}", dbpassword, encryptor.encrypt(dbpassword));
+		
+		logger.debug("기존  image :: {} | 변경 image :: {}",image, encryptor.encrypt(image));
+		logger.debug("기존  imagePw :: {} | 변경 imagePw :: {}",imagePw, encryptor.encrypt(imagePw));
+		
+		logger.debug("기존  ftpusername :: {} | 변경 ftpusername :: {}", ftpusername, encryptor.encrypt(ftpusername));
+		logger.debug("기존  ftppassword :: {} | 변경 ftppassword :: {}", ftppassword, encryptor.encrypt(ftppassword));
+		
+		logger.debug("기존  username :: {} | 변경 username :: {}", username, encryptor.encrypt(username));
+		logger.debug("기존  password :: {} | 변경 password :: {}", password, encryptor.encrypt(password));
+	}
+
+}
+```
+
+1. 프로퍼티 파일
+
+```java
+username: ENC(P1aRrToMyLLAgIuXUThASDGErvDw42V2JMfAZfU10ASDGEvpS2BBNNL)
+```
+
+- 이런 식으로 테스트 결과를 ENC로 감싸주면 context에 등록된 빈이 복호화를 해준다.
